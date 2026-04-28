@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KB — Knowledge Graph</title>
+<title>Brain — Knowledge Graph</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e0; overflow: hidden; }
@@ -93,13 +93,13 @@
 <div id="app">
   <div id="sidebar">
     <div id="sidebar-header">
-      <h1>KB / Knowledge Graph</h1>
+      <h1>🧠 Brain Graph</h1>
       <div class="stats"><span id="node-count">—</span> nodes &middot; <span id="edge-count">—</span> edges</div>
       <input type="text" id="search" placeholder="Search notes..." />
     </div>
     <div id="filters">
       <div class="filter-group">
-        <h3>Node Type</h3>
+        <h3>Clusters</h3>
         <div id="type-filters"></div>
       </div>
       <div class="filter-group">
@@ -124,11 +124,29 @@
 </div>
 
 <script>
+// Department-based colors for brain clustering
+const DEPT_COLORS = {
+  identity: '#ff4a6a',    // Red - who you are
+  finance: '#4aff8a',     // Green - money & investments
+  assets: '#4affdd',      // Teal - things you own
+  business: '#9a4aff',    // Purple - companies & deals
+  tools: '#ffcc4a',       // Yellow - how you work
+  workflow: '#ff8a4a',    // Orange - rules & processes
+  general: '#4a8aff',     // Blue fallback
+  personal: '#ff4a6a',    // Red (alias for identity)
+  projects: '#4aff8a',    // Green (alias)
+};
+
+// Legacy type colors (fallback)
 const TYPE_COLORS = {
   concept: '#4a8aff', project: '#4aff8a', person: '#ff4a6a',
   reference: '#9a4aff', vendor: '#4affdd', process: '#ffcc4a',
   client: '#ff4aee'
 };
+
+function getNodeColor(node) {
+  return DEPT_COLORS[node.department] || TYPE_COLORS[node.type] || '#4a8aff';
+}
 
 let graph = { nodes: [], edges: [] };
 let simulation = { nodes: [], edges: [] };
@@ -244,7 +262,7 @@ function tick() {
 }
 
 function isVisible(node) {
-  if (activeTypes.size && !activeTypes.has(node.type)) return false;
+  if (activeTypes.size && !activeTypes.has(node.department)) return false;
   if (activeTags.size && !node.tags.some(t => activeTags.has(t))) return false;
   if (searchQuery && !node.label.toLowerCase().includes(searchQuery) && !node.id.toLowerCase().includes(searchQuery)) return false;
   return true;
@@ -270,7 +288,7 @@ function draw() {
   // Nodes
   for (const n of simulation.nodes) {
     if (!isVisible(n)) continue;
-    const color = TYPE_COLORS[n.type] || '#4a8aff';
+    const color = getNodeColor(n);
     const isHovered = n === hoveredNode;
     const isSelected = n === selectedNode;
     const r = isHovered || isSelected ? 9 : 6;
@@ -424,13 +442,13 @@ function navigateTo(slug) {
 }
 
 function buildFilters() {
-  const types = [...new Set(graph.nodes.map(n => n.type))].sort();
+  const depts = [...new Set(graph.nodes.map(n => n.department))].sort();
   const allTags = [...new Set(graph.nodes.flatMap(n => n.tags))].sort();
 
   const typeDiv = document.getElementById('type-filters');
-  typeDiv.innerHTML = types.map(t =>
-    `<span class="filter-btn" data-type="${t}" onclick="toggleType('${t}', this)">
-      <span style="color:${TYPE_COLORS[t] || '#4a8aff'}">●</span> ${t}
+  typeDiv.innerHTML = depts.map(d =>
+    `<span class="filter-btn" data-type="${d}" onclick="toggleType('${d}', this)">
+      <span style="color:${DEPT_COLORS[d] || '#4a8aff'}">●</span> ${d}
     </span>`
   ).join('');
 
@@ -458,7 +476,7 @@ function updateNoteList() {
   list.innerHTML = visible.map(n => `
     <div class="note-item" data-slug="${n.id}" onclick="navigateTo('${n.id}')">
       <div class="title">${n.label}</div>
-      <span class="type-badge type-${n.type}">${n.type}</span>
+      <span class="type-badge" style="background:${getNodeColor(n)}22;color:${getNodeColor(n)}">${n.department || n.type}</span>
     </div>
   `).join('');
 }

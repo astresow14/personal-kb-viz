@@ -61,6 +61,7 @@ function parseNote(name, content) {
   const slug = name.replace('.md', '');
   let type = 'concept';
   let displayType = 'concept';
+  let department = 'general';
   let tags = [];
   let links = [];
   let title = slug;
@@ -77,6 +78,9 @@ function parseNote(name, content) {
       if (dtMatch) displayType = dtMatch[1].trim();
       const confMatch = fm.match(/^confidential:\s*true/m);
       if (confMatch) confidential = true;
+      // Parse department
+      const deptMatch = fm.match(/^department:\s*\[([^\]]*)\]/m);
+      if (deptMatch) department = deptMatch[1].split(',')[0].trim();
     }
   }
 
@@ -96,7 +100,7 @@ function parseNote(name, content) {
     links = linkLine[1].match(/\[\[([^\]]+)\]\]/g)?.map(l => l.slice(2, -2)) || [];
   }
 
-  return { slug, title, type, displayType, tags, links, confidential };
+  return { slug, title, type, displayType, department, tags, links, confidential };
 }
 
 // API endpoints
@@ -110,6 +114,7 @@ app.get('/api/graph', async (req, res) => {
       id: n.slug,
       label: n.title,
       type: n.displayType,
+      department: n.department,
       tags: n.tags,
       confidential: n.confidential
     }));
