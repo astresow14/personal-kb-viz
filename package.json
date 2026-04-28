@@ -1,0 +1,12 @@
+{
+  "name": "kb-viz",
+  "version": "1.0.0",
+  "description": "Knowledge base graph visualization",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

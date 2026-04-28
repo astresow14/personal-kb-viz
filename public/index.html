@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KB — Knowledge Graph</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e0; overflow: hidden; }
+
+  #app { display: flex; height: 100vh; }
+
+  /* Sidebar */
+  #sidebar {
+    width: 300px; min-width: 300px; background: #12121a;
+    border-right: 1px solid #1e1e2e; display: flex; flex-direction: column;
+    z-index: 10;
+  }
+  #sidebar-header { padding: 20px; border-bottom: 1px solid #1e1e2e; }
+  #sidebar-header h1 { font-size: 16px; color: #fff; margin-bottom: 4px; }
+  #sidebar-header .stats { font-size: 12px; color: #666; }
+  #search { width: 100%; padding: 10px 14px; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; color: #e0e0e0; font-size: 14px; margin-top: 12px; outline: none; }
+  #search:focus { border-color: #4a4af0; }
+  #search::placeholder { color: #555; }
+
+  /* Filters */
+  #filters { padding: 16px 20px; border-bottom: 1px solid #1e1e2e; }
+  #filters h3 { font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 8px; letter-spacing: 1px; }
+  .filter-group { margin-bottom: 12px; }
+  .filter-btn {
+    display: inline-block; padding: 4px 10px; margin: 2px; border-radius: 12px;
+    font-size: 11px; cursor: pointer; border: 1px solid #2a2a3e; background: #1a1a2e;
+    color: #999; transition: all 0.2s;
+  }
+  .filter-btn:hover { border-color: #4a4af0; color: #e0e0e0; }
+  .filter-btn.active { background: #4a4af0; border-color: #4a4af0; color: #fff; }
+
+  /* Note list */
+  #note-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .note-item {
+    padding: 10px 12px; border-radius: 8px; cursor: pointer;
+    margin-bottom: 2px; transition: background 0.15s;
+  }
+  .note-item:hover { background: #1a1a2e; }
+  .note-item.selected { background: #1e1e3e; }
+  .note-item .title { font-size: 13px; color: #e0e0e0; }
+  .note-item .type-badge {
+    display: inline-block; font-size: 10px; padding: 2px 6px;
+    border-radius: 4px; margin-top: 4px;
+  }
+
+  /* Graph area */
+  #graph-area { flex: 1; position: relative; }
+  #graph-canvas { width: 100%; height: 100%; }
+
+  /* Detail panel */
+  #detail-panel {
+    position: absolute; top: 16px; right: 16px; width: 360px;
+    background: #12121aee; backdrop-filter: blur(12px);
+    border: 1px solid #1e1e2e; border-radius: 12px;
+    padding: 20px; display: none; max-height: 80vh; overflow-y: auto;
+    z-index: 5;
+  }
+  #detail-panel.visible { display: block; }
+  #detail-panel .close { position: absolute; top: 12px; right: 16px; cursor: pointer; color: #666; font-size: 18px; }
+  #detail-panel .close:hover { color: #fff; }
+  #detail-panel h2 { font-size: 18px; color: #fff; margin-bottom: 8px; padding-right: 30px; }
+  #detail-panel .meta { font-size: 12px; color: #888; margin-bottom: 12px; }
+  #detail-panel .content { font-size: 13px; line-height: 1.6; color: #ccc; white-space: pre-wrap; }
+  #detail-panel .tag { display: inline-block; background: #1a1a2e; padding: 2px 8px; border-radius: 10px; font-size: 11px; color: #aaa; margin: 2px; }
+  #detail-panel .link-item { display: block; padding: 4px 0; color: #6a6af0; cursor: pointer; font-size: 13px; text-decoration: none; }
+  #detail-panel .link-item:hover { color: #8a8aff; }
+
+  /* Loading */
+  #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #666; font-size: 14px; }
+
+  /* Type colors */
+  .type-concept { background: #1a3a6a; color: #6ab0ff; }
+  .type-project { background: #1a4a2a; color: #6aff8a; }
+  .type-person { background: #4a1a2a; color: #ff6a8a; }
+  .type-reference { background: #3a1a4a; color: #b06aff; }
+  .type-vendor { background: #1a3a3a; color: #6affdd; }
+  .type-process { background: #3a3a1a; color: #ffdd6a; }
+  .type-client { background: #3a1a3a; color: #ff6aee; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>KB / Knowledge Graph</h1>
+      <div class="stats"><span id="node-count">—</span> nodes &middot; <span id="edge-count">—</span> edges</div>
+      <input type="text" id="search" placeholder="Search notes..." />
+    </div>
+    <div id="filters">
+      <div class="filter-group">
+        <h3>Node Type</h3>
+        <div id="type-filters"></div>
+      </div>
+      <div class="filter-group">
+        <h3>Tags</h3>
+        <div id="tag-filters"></div>
+      </div>
+    </div>
+    <div id="note-list"></div>
+  </div>
+  <div id="graph-area">
+    <div id="loading">Loading knowledge graph...</div>
+    <canvas id="graph-canvas"></canvas>
+    <div id="detail-panel">
+      <span class="close" onclick="closeDetail()">&times;</span>
+      <h2 id="detail-title"></h2>
+      <div class="meta" id="detail-meta"></div>
+      <div id="detail-tags"></div>
+      <div class="content" id="detail-content"></div>
+      <div id="detail-links"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TYPE_COLORS = {
+  concept: '#4a8aff', project: '#4aff8a', person: '#ff4a6a',
+  reference: '#9a4aff', vendor: '#4affdd', process: '#ffcc4a',
+  client: '#ff4aee'
+};
+
+let graph = { nodes: [], edges: [] };
+let simulation = { nodes: [], edges: [] };
+let canvas, ctx;
+let width, height;
+let transform = { x: 0, y: 0, scale: 1 };
+let dragging = null, panning = false, panStart = { x: 0, y: 0 };
+let hoveredNode = null, selectedNode = null;
+let activeTypes = new Set(), activeTags = new Set();
+let searchQuery = '';
+let animFrame;
+
+async function init() {
+  canvas = document.getElementById('graph-canvas');
+  ctx = canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize', resize);
+
+  canvas.addEventListener('mousedown', onMouseDown);
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mouseup', onMouseUp);
+  canvas.addEventListener('wheel', onWheel);
+  canvas.addEventListener('dblclick', onDblClick);
+
+  document.getElementById('search').addEventListener('input', e => {
+    searchQuery = e.target.value.toLowerCase();
+    updateNoteList();
+    draw();
+  });
+
+  try {
+    const res = await fetch('/api/graph');
+    graph = await res.json();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('node-count').textContent = graph.nodes.length;
+    document.getElementById('edge-count').textContent = graph.edges.length;
+    initSimulation();
+    buildFilters();
+    updateNoteList();
+    animate();
+  } catch (err) {
+    document.getElementById('loading').textContent = 'Error loading graph: ' + err.message;
+  }
+}
+
+function resize() {
+  const area = document.getElementById('graph-area');
+  width = canvas.width = area.clientWidth;
+  height = canvas.height = area.clientHeight;
+}
+
+function initSimulation() {
+  const N = graph.nodes.length;
+  simulation.nodes = graph.nodes.map((n, i) => ({
+    ...n,
+    x: width/2 + (Math.random() - 0.5) * Math.min(width, 600),
+    y: height/2 + (Math.random() - 0.5) * Math.min(height, 600),
+    vx: 0, vy: 0,
+    radius: 6
+  }));
+  const nodeMap = {};
+  simulation.nodes.forEach(n => nodeMap[n.id] = n);
+  simulation.edges = graph.edges.map(e => ({
+    source: nodeMap[e.source],
+    target: nodeMap[e.target]
+  })).filter(e => e.source && e.target);
+}
+
+function tick() {
+  const nodes = simulation.nodes;
+  const edges = simulation.edges;
+  const alpha = 0.3;
+
+  // Center gravity
+  for (const n of nodes) {
+    n.vx += (width/2 - n.x) * 0.0005;
+    n.vy += (height/2 - n.y) * 0.0005;
+  }
+
+  // Repulsion
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      let dx = nodes[j].x - nodes[i].x;
+      let dy = nodes[j].y - nodes[i].y;
+      let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      let force = 800 / (dist * dist);
+      let fx = dx / dist * force;
+      let fy = dy / dist * force;
+      nodes[i].vx -= fx; nodes[i].vy -= fy;
+      nodes[j].vx += fx; nodes[j].vy += fy;
+    }
+  }
+
+  // Attraction
+  for (const e of edges) {
+    let dx = e.target.x - e.source.x;
+    let dy = e.target.y - e.source.y;
+    let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    let force = (dist - 80) * 0.005;
+    let fx = dx / dist * force;
+    let fy = dy / dist * force;
+    e.source.vx += fx; e.source.vy += fy;
+    e.target.vx -= fx; e.target.vy -= fy;
+  }
+
+  // Apply velocity
+  for (const n of nodes) {
+    if (n === dragging) continue;
+    n.vx *= 0.85; n.vy *= 0.85;
+    n.x += n.vx * alpha;
+    n.y += n.vy * alpha;
+  }
+}
+
+function isVisible(node) {
+  if (activeTypes.size && !activeTypes.has(node.type)) return false;
+  if (activeTags.size && !node.tags.some(t => activeTags.has(t))) return false;
+  if (searchQuery && !node.label.toLowerCase().includes(searchQuery) && !node.id.toLowerCase().includes(searchQuery)) return false;
+  return true;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.translate(transform.x, transform.y);
+  ctx.scale(transform.scale, transform.scale);
+
+  // Edges
+  ctx.lineWidth = 0.5;
+  for (const e of simulation.edges) {
+    if (!isVisible(e.source) || !isVisible(e.target)) continue;
+    ctx.strokeStyle = '#1e2e4a';
+    ctx.beginPath();
+    ctx.moveTo(e.source.x, e.source.y);
+    ctx.lineTo(e.target.x, e.target.y);
+    ctx.stroke();
+  }
+
+  // Nodes
+  for (const n of simulation.nodes) {
+    if (!isVisible(n)) continue;
+    const color = TYPE_COLORS[n.type] || '#4a8aff';
+    const isHovered = n === hoveredNode;
+    const isSelected = n === selectedNode;
+    const r = isHovered || isSelected ? 9 : 6;
+
+    // Glow
+    if (isHovered || isSelected) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 15;
+    }
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    // Label
+    if (transform.scale > 0.5 || isHovered || isSelected) {
+      ctx.fillStyle = isHovered || isSelected ? '#fff' : '#999';
+      ctx.font = `${isHovered || isSelected ? 12 : 10}px -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(n.label, n.x, n.y - r - 4);
+    }
+  }
+
+  ctx.restore();
+}
+
+function animate() {
+  tick();
+  draw();
+  animFrame = requestAnimationFrame(animate);
+}
+
+function screenToWorld(sx, sy) {
+  return { x: (sx - transform.x) / transform.scale, y: (sy - transform.y) / transform.scale };
+}
+
+function findNode(sx, sy) {
+  const { x, y } = screenToWorld(sx, sy);
+  for (let i = simulation.nodes.length - 1; i >= 0; i--) {
+    const n = simulation.nodes[i];
+    if (!isVisible(n)) continue;
+    const dx = n.x - x, dy = n.y - y;
+    if (dx*dx + dy*dy < 144) return n;
+  }
+  return null;
+}
+
+function onMouseDown(e) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const node = findNode(sx, sy);
+  if (node) {
+    dragging = node;
+    selectedNode = node;
+    showDetail(node);
+  } else {
+    panning = true;
+    panStart = { x: e.clientX - transform.x, y: e.clientY - transform.y };
+    selectedNode = null;
+    closeDetail();
+  }
+}
+
+function onMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+
+  if (dragging) {
+    const { x, y } = screenToWorld(sx, sy);
+    dragging.x = x; dragging.y = y;
+    dragging.vx = 0; dragging.vy = 0;
+  } else if (panning) {
+    transform.x = e.clientX - panStart.x;
+    transform.y = e.clientY - panStart.y;
+  } else {
+    const node = findNode(sx, sy);
+    canvas.style.cursor = node ? 'pointer' : 'grab';
+    hoveredNode = node;
+  }
+}
+
+function onMouseUp() { dragging = null; panning = false; }
+
+function onWheel(e) {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  const newScale = Math.max(0.1, Math.min(5, transform.scale * delta));
+  transform.x = mx - (mx - transform.x) * (newScale / transform.scale);
+  transform.y = my - (my - transform.y) * (newScale / transform.scale);
+  transform.scale = newScale;
+}
+
+function onDblClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const node = findNode(e.clientX - rect.left, e.clientY - rect.top);
+  if (node) showDetail(node);
+}
+
+async function showDetail(node) {
+  try {
+    const res = await fetch(`/api/note/${node.id}`);
+    const note = await res.json();
+    document.getElementById('detail-title').textContent = note.title;
+    document.getElementById('detail-meta').innerHTML = `<span class="note-item"><span class="type-badge type-${node.type}">${node.type}</span></span>`;
+
+    const tagsDiv = document.getElementById('detail-tags');
+    tagsDiv.innerHTML = note.tags.map(t => `<span class="tag">#${t}</span>`).join('');
+
+    // Extract body (remove frontmatter and metadata lines)
+    let body = note.raw;
+    if (body.startsWith('---')) {
+      const parts = body.split('---');
+      if (parts.length >= 3) body = parts.slice(2).join('---').trim();
+    }
+    body = body.replace(/^tags:\s*.+$/m, '').replace(/^Links:\s*.+$/m, '').replace(/^# .+$/m, '').trim();
+    document.getElementById('detail-content').textContent = body.slice(0, 2000);
+
+    const linksDiv = document.getElementById('detail-links');
+    if (note.links.length) {
+      linksDiv.innerHTML = '<h4 style="margin-top:12px;font-size:12px;color:#666;">Links</h4>' +
+        note.links.map(l => `<a class="link-item" onclick="navigateTo('${l}')">${l}</a>`).join('');
+    } else {
+      linksDiv.innerHTML = '';
+    }
+
+    document.getElementById('detail-panel').classList.add('visible');
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('visible');
+}
+
+function navigateTo(slug) {
+  const node = simulation.nodes.find(n => n.id === slug);
+  if (node) {
+    selectedNode = node;
+    transform.x = width/2 - node.x * transform.scale;
+    transform.y = height/2 - node.y * transform.scale;
+    showDetail(node);
+    highlightInList(slug);
+  }
+}
+
+function buildFilters() {
+  const types = [...new Set(graph.nodes.map(n => n.type))].sort();
+  const allTags = [...new Set(graph.nodes.flatMap(n => n.tags))].sort();
+
+  const typeDiv = document.getElementById('type-filters');
+  typeDiv.innerHTML = types.map(t =>
+    `<span class="filter-btn" data-type="${t}" onclick="toggleType('${t}', this)">
+      <span style="color:${TYPE_COLORS[t] || '#4a8aff'}">●</span> ${t}
+    </span>`
+  ).join('');
+
+  const tagDiv = document.getElementById('tag-filters');
+  tagDiv.innerHTML = allTags.slice(0, 20).map(t =>
+    `<span class="filter-btn" data-tag="${t}" onclick="toggleTag('${t}', this)">#${t}</span>`
+  ).join('');
+}
+
+function toggleType(type, el) {
+  if (activeTypes.has(type)) { activeTypes.delete(type); el.classList.remove('active'); }
+  else { activeTypes.add(type); el.classList.add('active'); }
+  updateNoteList();
+}
+
+function toggleTag(tag, el) {
+  if (activeTags.has(tag)) { activeTags.delete(tag); el.classList.remove('active'); }
+  else { activeTags.add(tag); el.classList.add('active'); }
+  updateNoteList();
+}
+
+function updateNoteList() {
+  const list = document.getElementById('note-list');
+  const visible = simulation.nodes.filter(n => isVisible(n)).sort((a, b) => a.label.localeCompare(b.label));
+  list.innerHTML = visible.map(n => `
+    <div class="note-item" data-slug="${n.id}" onclick="navigateTo('${n.id}')">
+      <div class="title">${n.label}</div>
+      <span class="type-badge type-${n.type}">${n.type}</span>
+    </div>
+  `).join('');
+}
+
+function highlightInList(slug) {
+  document.querySelectorAll('.note-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.slug === slug);
+  });
+}
+
+init();
+</script>
+</body>
+</html>
